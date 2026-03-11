@@ -1,3 +1,5 @@
 .env
 venv
 .git
+carousel_slides/
+__pycache__/
