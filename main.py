@@ -173,7 +173,7 @@ def condense_headline(headline, max_chars=75):
         return headline
 
     prompt = f"""Condense this news headline to under {max_chars} characters.
-Keep it punchy, factual, and impactful — no fluff, no ellipsis.
+Keep it punchy, factual, and impactful without losing any details — no fluff, no ellipsis.
 Return ONLY the condensed headline. No quotes, no explanation.
 
 Original: {headline}"""
