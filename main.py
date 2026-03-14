@@ -10,9 +10,12 @@ load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# Dedicated environment, nature, conservation, and climate RSS feeds
-# All free, no API key required
+# ─────────────────────────────────────────────────────────────────────────────
+# RSS Feeds — nature, conservation, climate, and positive/solutions news
+# ─────────────────────────────────────────────────────────────────────────────
+
 RSS_FEEDS = [
+    # ── Environment & Conservation ─────────────────────────────────────────
     "https://www.theguardian.com/environment/rss",
     "http://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
     "https://feeds.reuters.com/reuters/environment",
@@ -21,10 +24,46 @@ RSS_FEEDS = [
     "https://news.mongabay.com/feed/",
     "https://e360.yale.edu/feed",
     "https://www.conservation.org/feed",
-    "https://www.worldwildlife.org/magazine/rss",
-    "https://www.nationalgeographic.com/environment/rss",
     "https://insideclimatenews.org/feed/",
     "https://www.carbonbrief.org/feed",
+    "https://www.rewildingbritain.org.uk/explore-rewilding/news-and-updates?format=rss",
+    "https://www.fauna-flora.org/news/feed/",
+    "https://www.birdlife.org/news/rss/",
+    "https://www.iucn.org/news/feed",
+    "https://www.clientearth.org/feed/",
+    "https://www.globalforestwatch.org/blog/feed/",
+    "https://www.oceanconservancy.org/feed/",
+    "https://www.surfrider.org/coastal-blog/feed",
+    "https://coral.org/blog/feed/",
+    "https://www.awf.org/blog/feed",
+    "https://www.wcs.org/our-work/species/rss",
+    "https://newint.org/feed",
+
+    # ── Good News / Solutions Journalism ──────────────────────────────────
+    "https://www.goodnewsnetwork.org/feed/",
+    "https://www.positive.news/feed/",
+    "https://www.yesmagazine.org/feed/",
+    "https://www.solutionsjournalism.org/feed",
+    "https://www.upworthy.com/rss",
+    "https://www.good.is/rss",
+    "https://reasonstobecheerful.world/feed/",
+    "https://constructivejournalism.org/feed/",
+    "https://theoptimist.com/feed/",
+
+    # ── Science & Nature ──────────────────────────────────────────────────
+    "https://www.nationalgeographic.com/environment/rss",
+    "https://www.worldwildlife.org/magazine/rss",
+    "https://www.newscientist.com/subject/environment/feed/",
+    "https://www.sciencedaily.com/rss/earth_climate.xml",
+    "https://phys.org/rss-feed/earth-news/",
+    "https://www.earth.com/feed/",
+
+    # ── Clean Energy & Climate Solutions ──────────────────────────────────
+    "https://cleantechnica.com/feed/",
+    "https://electrek.co/feed/",
+    "https://www.renewableenergyworld.com/feed/",
+    "https://energymonitor.ai/feed/",
+    "https://www.greenbiz.com/feeds/news",
 ]
 
 
@@ -55,7 +94,7 @@ def fetch_recent_headlines():
             continue
 
     headlines = list(dict.fromkeys(headlines))
-    return headlines[:120]
+    return headlines[:200]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -78,53 +117,122 @@ def extract_json(text):
     return None
 
 
+HOOK_WORDS = {
+    "how", "why", "what", "who", "when", "where", "which", "is", "are",
+    "can", "will", "could", "should", "would", "inside", "meet", "watch",
+    "see", "guess",
+}
+
+REJECT_PHRASES = [
+    "researchers warn", "scientists warn", "experts warn", "study warns",
+    "under threat", "at risk", "in danger", "faces threat", "faces extinction",
+    "could be lost", "may disappear", "raising concerns", "sounding alarm",
+]
+
+def pre_filter(headlines):
+    """Fast Python filter before the LLM — removes obvious rejects for free."""
+    kept = []
+    for h in headlines:
+        lower = h.lower().strip()
+        first_word = lower.split()[0].rstrip("'s") if lower.split() else ""
+
+        if first_word in HOOK_WORDS:
+            print(f"  ⚡ Pre-filtered (hook): {h}", flush=True)
+            continue
+
+        if any(phrase in lower for phrase in REJECT_PHRASES):
+            print(f"  ⚡ Pre-filtered (warning): {h}", flush=True)
+            continue
+
+        kept.append(h)
+    return kept
+
+
 def classify_headlines(headlines):
+    headlines = pre_filter(headlines)
     numbered = "\n".join([f"{i+1}. {h}" for i, h in enumerate(headlines)])
 
     prompt = f"""
-You are a strict content filter for an Instagram page focused on positive nature and conservation news.
+You are a content curator for an Instagram page that shares uplifting, real-world wins for nature and humanity.
 
-Your job is to select ONLY headlines that confirm a CONCRETE POSITIVE OUTCOME already achieved — not debates, discoveries of neutral facts, controversies, or general interest nature stories.
+Your job: select headlines that report a REAL, ALREADY-HAPPENED positive outcome — something that has concretely improved the world.
 
 ━━━━━━━━━━━━━━━━━━━━━━
-✅ ACCEPT — only if the headline confirms ONE of these:
+✅ ACCEPT — if the headline confirms any of these:
 ━━━━━━━━━━━━━━━━━━━━━━
-• A species has recovered, returned, or been saved from extinction
+
+NATURE & WILDLIFE:
+• A species has recovered, returned, or been protected from extinction
 • A new area of land or ocean has been officially protected or designated
-• A conservation effort has succeeded (animals reintroduced, habitat restored, poaching stopped)
-• A country, city, or company has hit a clean energy or emissions milestone
-• An ecosystem has been restored (forests replanted, rivers cleaned, coral recovered)
-• A climate solution or green technology has been deployed at real-world scale
-• A court or government has ruled IN FAVOUR of nature or environmental protection
+• A conservation or rewilding effort has succeeded (animals reintroduced, habitat restored, poaching stopped)
+• An ecosystem has been restored (forests, rivers cleaned, coral recovered, mangroves returning)
+• A wildlife population has grown or is thriving
+• An animal sanctuary, reserve, or refuge has been established
+
+ENVIRONMENT & CLIMATE:
+• A country, city, or region has hit a clean energy or emissions milestone (e.g. 100% renewables for X days)
+• A climate solution or clean technology has been deployed at real scale
+• A river, lake, or ocean area has been cleaned up or declared safe
+• A court or government has ruled IN FAVOUR of nature or the environment
+
+HUMAN & SOCIAL GOOD (with a clear benefit to people or nature):
+• A humane or progressive criminal justice reform that has measurably worked (e.g. Netherlands reducing prisons due to falling crime)
+• A public health or wellbeing initiative that has expanded or succeeded (e.g. nature prescriptions, free outdoor swimming)
+• A city or country has made nature more accessible to its people
+• A social or community win that directly benefits wildlife or environment
+
+SCIENCE WITH A CLEAR UPSIDE:
+• Research confirming animals or ecosystems are thriving or more resilient than expected
+• A discovery that gives scientists or conservationists new tools to protect nature
+• New evidence that a recovery effort is working better than expected
 
 ━━━━━━━━━━━━━━━━━━━━━━
-❌ REJECT — always reject these, no exceptions:
+❌ REJECT — always reject:
 ━━━━━━━━━━━━━━━━━━━━━━
-• Animal biology facts or curiosity science ("hedgehog hearing range discovered")
-• Controversies, disputes, or rows about environmental topics ("company at centre of row over...")
-• Sustainability greenwashing debates or labelling disputes
-• Scientific studies that describe problems, risks, or observations without a positive outcome
-• Deep-sea or space discoveries that are just "interesting" but change nothing
-• Beautiful places, scenic destinations, or travel recommendations
-• Wildlife behaviour stories with no conservation outcome
-• Any politics, crime, economics, business, sports, celebrity news
-• Anything framed as a warning, threat, concern, or controversy
-• Anything where the positive outcome is hypothetical, potential, or in the future
+• HOOK HEADLINES — any headline that starts with "How", "Why", "What", "The story of",
+  "Inside", "Meet", "Is", "Are", "Can", "Will", "Could", "Should", or any question word.
+  These are editorial hooks, not factual news. A good headline states what happened, not asks a question.
+  e.g. "How reintroducing beavers is changing our landscape" → ❌ REJECT
+  e.g. "Why saving seagrass could help save coastlines" → ❌ REJECT
+  e.g. "How the Netherlands bent bureaucracy into something beautiful" → ❌ REJECT
+• Vague or feel-good headlines with no stated concrete outcome (e.g. "Superbloom carpets Death Valley" — a natural event, not a win)
+• Natural seasonal phenomena or weather events with no conservation relevance
+• Curiosity animal facts with no conservation outcome ("hedgehog hearing range discovered")
+• Controversies, disputes, rows, or political conflicts about environmental topics
+• Greenwashing debates or labelling disputes
+• Studies that only describe problems, risks, or threats — even new ones
+• Anything containing the words "warn", "warning", "researchers warn", "scientists warn", "at risk", "under threat", "concern" — these are bad news dressed as news
+• Travel recommendations, beautiful destinations, or scenic places
+• Anything framed as a warning, concern, setback, or threat
+• Outcomes that are hypothetical, planned, potential, or in the future
+• Business, economics, crime, celebrity, or sports news with no nature/human-benefit angle
+• Clean energy stories that are purely financial/economic with no clear human or nature benefit (e.g. "China less vulnerable to energy shocks" — this is geopolitics, not a nature/human win)
 
 ━━━━━━━━━━━━━━━━━━━━━━
 EXAMPLE DECISIONS:
 ━━━━━━━━━━━━━━━━━━━━━━
-"Secret of hedgehog hearing discovered at far beyond human range" → ❌ REJECT (curiosity animal fact)
-"World's largest krill harvester at centre of row over sustainability label" → ❌ REJECT (controversy)
-"Deep ocean microbes may already be prepared to tackle climate change" → ❌ REJECT (hypothetical)
-"Scotland creates largest marine protected area in its history" → ✅ ACCEPT
-"Humpback whale population reaches pre-whaling levels in South Atlantic" → ✅ ACCEPT
+"Giant pandas are no longer endangered" → ✅ ACCEPT
+"Great Lakes otters flourish in US and Ontario" → ✅ ACCEPT (population thriving)
+"Tortoiseshell butterfly recolonizes England decades after elm disease eliminated it" → ✅ ACCEPT (species recovery)
+"New baby boom for cheetahs in India after world-first reintroduction" → ✅ ACCEPT (reintroduction success)
+"Hawaii university hauls 84 tons of derelict gear from Pacific Ocean" → ✅ ACCEPT (cleanup completed)
+"The Netherlands has closed 20+ prisons as crime rates fall due to prevention programmes" → ✅ ACCEPT (social good with real outcome)
+"UK's first nature prescription pilot is expanding nationwide" → ✅ ACCEPT (health + nature win)
+"Africa's mangroves are recovering faster than expected" → ✅ ACCEPT (ecosystem recovery confirmed)
 "Costa Rica runs on 100% renewable energy for record 400 days" → ✅ ACCEPT
-"European court rules against logging in ancient Polish forest" → ✅ ACCEPT
-"New solar farm now powers 200,000 homes in Kenya" → ✅ ACCEPT
-━━━━━━━━━━━━━━━━━━━━━━
+"Global Ocean Treaty is officially in force" → ✅ ACCEPT
+"How reintroducing beavers is changing our landscape" → ❌ REJECT (hook headline starting with "How", states no concrete outcome)
+"Why saving seagrass meadows could help save the world's coastlines" → ❌ REJECT (hook headline starting with "Why", hypothetical)
+"How the Netherlands bent bureaucracy into something beautiful" → ❌ REJECT (hook headline, vague)
+"Superbloom carpets Death Valley" → ❌ REJECT (natural seasonal event, no conservation outcome)
+"Mangrove forests are short of breath, researchers warn" → ❌ REJECT (contains "warn" — this is bad news)
+"Oregon buys Abiqua Falls property" → ❌ REJECT (too vague — no stated conservation outcome)
+"China's clean energy push makes it less vulnerable to energy shocks" → ❌ REJECT (geopolitics, not a nature win)
+"Secret of hedgehog hearing discovered at far beyond human range" → ❌ REJECT (curiosity fact, no outcome)
+"Deep ocean microbes may already be prepared to tackle climate change" → ❌ REJECT (hypothetical)
 
-When in doubt — REJECT. It is better to miss a story than to include a bad one.
+━━━━━━━━━━━━━━━━━━━━━━
+When in doubt — REJECT. Quality over quantity.
 
 Return ONLY a raw JSON array. No markdown, no code fences, no explanation.
 
@@ -161,38 +269,11 @@ HEADLINES:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 3: Condense
-# ─────────────────────────────────────────────────────────────────────────────
-
-def condense_headline(headline, max_chars=75):
-    """
-    If a headline exceeds max_chars, use Groq to shorten it while keeping
-    the core message intact. Returns the original if already short enough.
-    """
-    if len(headline) <= max_chars:
-        return headline
-
-    prompt = f"""Condense this news headline to under {max_chars} characters.
-Keep it punchy, factual, and impactful without losing any details — no fluff, no ellipsis.
-Return ONLY the condensed headline. No quotes, no explanation.
-
-Original: {headline}"""
-
-    completion = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2
-    )
-    result = completion.choices[0].message.content.strip().strip("\"'")
-    return result
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    print("Fetching headlines from nature & environment feeds...", flush=True)
+    print("Fetching headlines from nature, conservation & good news feeds...", flush=True)
     headlines = fetch_recent_headlines()
     print(f"Fetched {len(headlines)} unique headlines", flush=True)
 
@@ -208,21 +289,15 @@ def main():
         print("\nNo qualifying headlines found this week.", flush=True)
         return
 
-    print(f"\nFound {len(filtered)} qualifying headlines. Condensing long ones...", flush=True)
-    condensed = []
-    for h in filtered:
-        short = condense_headline(h)
-        if short != h:
-            print(f"  ✂  '{h[:55]}...' → '{short}'", flush=True)
-        condensed.append(short)
+    print(f"\nFound {len(filtered)} qualifying headlines.\n", flush=True)
 
-    print("\n🌿 Good Travel / Nature News This Week:\n", flush=True)
-    for i, headline in enumerate(condensed, 1):
+    print("🌿 Good News This Week:\n", flush=True)
+    for i, headline in enumerate(filtered, 1):
         print(f"{i:2d}. {headline}", flush=True)
 
     # ── Generate carousel slides ───────────────────────────────────────────
     from create_carousel import create_carousel
-    create_carousel(condensed, output_dir="carousel_slides")
+    create_carousel(filtered, output_dir="carousel_slides")
 
 
 if __name__ == "__main__":
