@@ -22,8 +22,10 @@ FONT_URLS = [
     "https://github.com/theleagueof/league-spartan/raw/master/static/LeagueSpartan-Bold.ttf",
 ]
 
-SLIDE_PX = 1080
+SLIDE_W = 1080          # 4:5 aspect ratio
+SLIDE_H = 1350
 GRADIENT_FRACTION = 0.25
+TEXT_SIDE_PADDING = 80  # minimum gap between text and slide edges
 
 
 # ─────────────────────────────────────────────
@@ -141,7 +143,7 @@ def fetch_pexels_image(headline):
 
     url = (
         f"https://api.pexels.com/v1/search"
-        f"?query={query}&per_page=5&orientation=square&size=large"
+        f"?query={query}&per_page=5&orientation=portrait&size=large"
     )
 
     try:
@@ -246,31 +248,42 @@ def pick_font_size(chars):
 
 def render_slide(img_bytes, headline, font_path):
 
-    size = SLIDE_PX
+    w, h = SLIDE_W, SLIDE_H
 
     if img_bytes:
 
         bg = Image.open(BytesIO(img_bytes)).convert("RGB")
 
-        w, h = bg.size
+        src_w, src_h = bg.size
 
-        m = min(w, h)
+        # Crop to 4:5 from the center
+        target_ratio = w / h
+        src_ratio = src_w / src_h
 
-        bg = bg.crop(((w-m)//2, (h-m)//2, (w+m)//2, (h+m)//2))
+        if src_ratio > target_ratio:
+            # Source is wider — crop width
+            new_w = int(src_h * target_ratio)
+            left = (src_w - new_w) // 2
+            bg = bg.crop((left, 0, left + new_w, src_h))
+        else:
+            # Source is taller — crop height
+            new_h = int(src_w / target_ratio)
+            top = (src_h - new_h) // 2
+            bg = bg.crop((0, top, src_w, top + new_h))
 
-        bg = bg.resize((size, size), Image.LANCZOS)
+        bg = bg.resize((w, h), Image.LANCZOS)
 
     else:
 
-        bg = Image.new("RGB", (size, size), (26,58,42))
+        bg = Image.new("RGB", (w, h), (26, 58, 42))
 
-    grad_h = int(size * GRADIENT_FRACTION)
+    grad_h = int(h * GRADIENT_FRACTION)
 
-    mask = make_gradient_mask(size, grad_h)
+    mask = make_gradient_mask(w, grad_h)
 
-    black_band = Image.new("RGB", (size, grad_h), (0,0,0))
+    black_band = Image.new("RGB", (w, grad_h), (0, 0, 0))
 
-    bg.paste(black_band, (0, size-grad_h), mask=mask)
+    bg.paste(black_band, (0, h - grad_h), mask=mask)
 
     draw = ImageDraw.Draw(bg)
 
@@ -280,27 +293,29 @@ def render_slide(img_bytes, headline, font_path):
 
     font = ImageFont.truetype(font_path, font_size)
 
-    side_margin = 50
-
     bottom_margin = 52
 
-    max_w = size - side_margin*2
+    max_text_w = w - TEXT_SIDE_PADDING * 2  # respect side padding
 
-    lines = wrap_text(text, font, max_w, draw)
+    lines = wrap_text(text, font, max_text_w, draw)
 
-    line_gap = int(font_size*0.22)
+    line_gap = int(font_size * 0.22)
 
     line_h = font_size + line_gap
 
-    total_h = len(lines)*line_h - line_gap
+    total_h = len(lines) * line_h - line_gap
 
-    y = max(size-bottom_margin-total_h, size-grad_h+10)
+    y = max(h - bottom_margin - total_h, h - grad_h + 10)
 
     for line in lines:
 
-        draw.text((side_margin+3,y+3), line, font=font, fill=(0,0,0))
+        # Measure this line's width and center it horizontally
+        bbox = draw.textbbox((0, 0), line, font=font)
+        line_w = bbox[2] - bbox[0]
+        x = (w - line_w) // 2
 
-        draw.text((side_margin,y), line, font=font, fill=(255,255,255))
+        draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0))   # shadow
+        draw.text((x, y),         line, font=font, fill=(255, 255, 255))
 
         y += line_h
 
@@ -321,7 +336,7 @@ def create_carousel(headlines, output_dir="carousel_slides"):
 
     paths = []
 
-    for i, headline in enumerate(headlines,1):
+    for i, headline in enumerate(headlines, 1):
 
         print(f"[{i}/{len(headlines)}] {headline}")
 
